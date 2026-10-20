@@ -1,0 +1,662 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Glass Hit Animation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: centered stage with glass wall, CSS 3D character */
+  :root {
+    --bg: #e8e4dc;
+    --floor: #c8c2b4;
+    --wall: rgba(180,220,255,0.18);
+    --wall-border: rgba(160,210,255,0.55);
+    --glass-shine: rgba(255,255,255,0.45);
+    --shadow: rgba(0,0,0,0.18);
+    --fg: #2a2520;
+    --skin: #d4956a;
+    --shirt: #f0ede6;
+    --pants: #2e4a7a;
+    --shoes: #3a2a1a;
+    --hair: #5a3a20;
+    --accent: #4a9eff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1a1a22; --floor: #252530; --fg: #e0ddd6;
+      --wall: rgba(100,160,220,0.12);
+      --wall-border: rgba(120,180,255,0.35);
+      --shadow: rgba(0,0,0,0.45);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1a22; --floor: #252530; --fg: #e0ddd6;
+    --wall: rgba(100,160,220,0.12);
+    --wall-border: rgba(120,180,255,0.35);
+    --shadow: rgba(0,0,0,0.45);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+    padding-block: 32px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow-x: hidden;
+  }
+
+  h1 {
+    font-size: clamp(1rem, 3vw, 1.25rem);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.55;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  .stage-wrapper {
+    width: min(520px, 100%);
+    position: relative;
+  }
+
+  .stage {
+    width: 100%;
+    aspect-ratio: 4/3;
+    perspective: 900px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background: linear-gradient(170deg, #c5dff5 0%, #dde8f0 40%, var(--floor) 40%, var(--floor) 100%);
+    box-shadow: 0 8px 40px var(--shadow);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .stage {
+      background: linear-gradient(170deg, #1a2840 0%, #1e2e44 40%, var(--floor) 40%, var(--floor) 100%);
+    }
+  }
+  :root[data-theme="dark"] .stage {
+    background: linear-gradient(170deg, #1a2840 0%, #1e2e44 40%, var(--floor) 40%, var(--floor) 100%);
+  }
+
+  /* Glass wall */
+  .glass-wall {
+    position: absolute;
+    right: 18%;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: linear-gradient(90deg, var(--glass-shine) 0%, var(--wall) 30%, var(--glass-shine) 60%, var(--wall) 100%);
+    border-left: 2px solid var(--wall-border);
+    border-right: 1px solid rgba(255,255,255,0.2);
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Crack overlay, hidden until impact */
+  .crack-overlay {
+    position: absolute;
+    right: 18%;
+    top: 5%;
+    width: 90px;
+    height: 85%;
+    z-index: 6;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-44px);
+  }
+
+  .crack-overlay svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Impact ripple */
+  .ripple {
+    position: absolute;
+    right: calc(18% - 30px);
+    top: 30%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    border: 3px solid rgba(180,220,255,0.7);
+    z-index: 7;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(50%, -50%);
+  }
+
+  /* Stars */
+  .stars {
+    position: absolute;
+    right: 15%;
+    top: 18%;
+    z-index: 8;
+    opacity: 0;
+    font-size: 20px;
+    pointer-events: none;
+  }
+
+  /* Character container */
+  .character {
+    position: absolute;
+    bottom: 35%;
+    left: 15%;
+    width: 60px;
+    height: 120px;
+    transform-style: preserve-3d;
+    transform-origin: bottom center;
+    will-change: transform, left;
+  }
+
+  /* Body parts using CSS 3D */
+  .part {
+    position: absolute;
+    transform-style: preserve-3d;
+  }
+
+  /* HEAD */
+  .head {
+    width: 26px;
+    height: 26px;
+    background: var(--skin);
+    border-radius: 5px 5px 4px 4px;
+    left: 17px;
+    top: 0;
+    transform-origin: center bottom;
+    box-shadow: inset -3px -3px 6px rgba(0,0,0,0.15);
+  }
+  .hair {
+    width: 26px;
+    height: 10px;
+    background: var(--hair);
+    border-radius: 4px 4px 0 0;
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  /* TORSO */
+  .torso {
+    width: 38px;
+    height: 36px;
+    background: var(--shirt);
+    border-radius: 4px;
+    left: 11px;
+    top: 28px;
+    transform-origin: center top;
+    box-shadow: inset -4px 0 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  /* shirt detail */
+  .torso::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 3px;
+    background: rgba(0,0,0,0.08);
+    border-radius: 2px;
+    top: 10px; left: 13px;
+  }
+
+  /* BELLY - heavyset */
+  .belly {
+    width: 42px;
+    height: 22px;
+    background: var(--shirt);
+    border-radius: 0 0 8px 8px;
+    left: 9px;
+    top: 58px;
+    box-shadow: inset -4px -2px 6px rgba(0,0,0,0.1);
+  }
+
+  /* LEFT ARM */
+  .arm-l {
+    width: 13px;
+    height: 38px;
+    background: var(--shirt);
+    border-radius: 4px;
+    left: 0;
+    top: 28px;
+    transform-origin: top center;
+  }
+  .arm-l::after {
+    content:'';
+    position:absolute;
+    width:13px; height:14px;
+    background:var(--skin);
+    border-radius:3px;
+    bottom:0; left:0;
+  }
+
+  /* RIGHT ARM */
+  .arm-r {
+    width: 13px;
+    height: 38px;
+    background: var(--shirt);
+    border-radius: 4px;
+    right: 0;
+    top: 28px;
+    transform-origin: top center;
+  }
+  .arm-r::after {
+    content:'';
+    position:absolute;
+    width:13px; height:14px;
+    background:var(--skin);
+    border-radius:3px;
+    bottom:0; left:0;
+  }
+
+  /* LEFT LEG */
+  .leg-l {
+    width: 16px;
+    height: 42px;
+    background: var(--pants);
+    border-radius: 3px;
+    left: 12px;
+    top: 78px;
+    transform-origin: top center;
+  }
+  .leg-l::after {
+    content:'';
+    position:absolute;
+    width:18px; height:10px;
+    background:var(--shoes);
+    border-radius:3px 3px 5px 5px;
+    bottom:-2px; left:-1px;
+  }
+
+  /* RIGHT LEG */
+  .leg-r {
+    width: 16px;
+    height: 42px;
+    background: var(--pants);
+    border-radius: 3px;
+    left: 32px;
+    top: 78px;
+    transform-origin: top center;
+  }
+  .leg-r::after {
+    content:'';
+    position:absolute;
+    width:18px; height:10px;
+    background:var(--shoes);
+    border-radius:3px 3px 5px 5px;
+    bottom:-2px; left:-1px;
+  }
+
+  /* Floor shadow */
+  .char-shadow {
+    position: absolute;
+    bottom: calc(35% - 8px);
+    left: 18%;
+    width: 50px;
+    height: 12px;
+    background: rgba(0,0,0,0.18);
+    border-radius: 50%;
+    transform: scaleX(1);
+    transform-origin: center;
+    will-change: transform, left;
+    z-index: 0;
+  }
+
+  /* Controls */
+  .controls {
+    margin-top: 20px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  button {
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+    letter-spacing: 0.03em;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  button:hover { opacity: 0.85; transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  button:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+  .label {
+    margin-top: 14px;
+    font-size: 0.8rem;
+    opacity: 0.45;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+</style>
+
+<h1>Glass Impact</h1>
+
+<div class="stage-wrapper">
+  <div class="stage" id="stage">
+    <!-- Floor shadow -->
+    <div class="char-shadow" id="shadow"></div>
+
+    <!-- Character -->
+    <div class="character" id="character">
+      <div class="part head" id="head">
+        <div class="hair"></div>
+      </div>
+      <div class="part torso" id="torso"></div>
+      <div class="part belly" id="belly"></div>
+      <div class="part arm-l" id="armL"></div>
+      <div class="part arm-r" id="armR"></div>
+      <div class="part leg-l" id="legL"></div>
+      <div class="part leg-r" id="legR"></div>
+    </div>
+
+    <!-- Glass wall -->
+    <div class="glass-wall"></div>
+
+    <!-- Crack overlay -->
+    <div class="crack-overlay" id="crack">
+      <svg viewBox="0 0 90 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g stroke="rgba(180,220,255,0.9)" stroke-width="1.5" stroke-linecap="round">
+          <!-- Main cracks from center -->
+          <line x1="45" y1="120" x2="10" y2="60"/>
+          <line x1="10" y1="60" x2="0" y2="30"/>
+          <line x1="10" y1="60" x2="5" y2="80"/>
+          <line x1="45" y1="120" x2="75" y2="55"/>
+          <line x1="75" y1="55" x2="88" y2="20"/>
+          <line x1="75" y1="55" x2="85" y2="80"/>
+          <line x1="45" y1="120" x2="20" y2="180"/>
+          <line x1="20" y1="180" x2="8" y2="230"/>
+          <line x1="20" y1="180" x2="15" y2="210"/>
+          <line x1="45" y1="120" x2="70" y2="200"/>
+          <line x1="70" y1="200" x2="82" y2="260"/>
+          <line x1="70" y1="200" x2="75" y2="220"/>
+          <!-- Secondary cracks -->
+          <line x1="28" y1="90" x2="15" y2="110"/>
+          <line x1="62" y1="80" x2="75" y2="100"/>
+          <line x1="32" y1="150" x2="18" y2="165"/>
+          <line x1="58" y1="160" x2="72" y2="175"/>
+        </g>
+        <!-- Impact center glow -->
+        <circle cx="45" cy="120" r="8" fill="rgba(200,230,255,0.3)" stroke="rgba(180,220,255,0.8)" stroke-width="1"/>
+        <circle cx="45" cy="120" r="3" fill="rgba(255,255,255,0.6)"/>
+      </svg>
+    </div>
+
+    <!-- Ripple -->
+    <div class="ripple" id="ripple"></div>
+
+    <!-- Stars -->
+    <div class="stars" id="stars">⭐ 💫 ⭐</div>
+  </div>
+
+  <div class="controls">
+    <button id="playBtn" onclick="startAnimation()">▶ Play</button>
+    <button id="resetBtn" onclick="resetAnimation()" disabled>↺ Reset</button>
+  </div>
+  <p class="label">CSS 3D · Frame-by-frame JS animation</p>
+</div>
+
+<script>
+const char   = document.getElementById('character');
+const shadow = document.getElementById('shadow');
+const head   = document.getElementById('head');
+const torso  = document.getElementById('torso');
+const belly  = document.getElementById('belly');
+const armL   = document.getElementById('armL');
+const armR   = document.getElementById('armR');
+const legL   = document.getElementById('legL');
+const legR   = document.getElementById('legR');
+const crack  = document.getElementById('crack');
+const ripple = document.getElementById('ripple');
+const stars  = document.getElementById('stars');
+const playBtn  = document.getElementById('playBtn');
+const resetBtn = document.getElementById('resetBtn');
+const stage  = document.getElementById('stage');
+
+// Stage dimensions (logical): left% of stage width
+// Glass wall is at right: 18%, so ~82% from left
+
+let animId = null;
+let startTime = null;
+let running = false;
+
+const stageW = () => stage.offsetWidth;
+const glassX = () => stageW() * 0.82; // pixel x of glass wall
+
+// Easing helpers
+const ease = (t, p=2) => t < .5 ? Math.pow(2*t,p)/2 : 1 - Math.pow(2*(1-t),p)/2;
+const easeOut = t => 1 - Math.pow(1-t, 3);
+const easeIn  = t => Math.pow(t, 2);
+const bounce  = t => {
+  const d1 = 2.75, n1 = 7.5625;
+  if (t < 1/d1) return n1*t*t;
+  if (t < 2/d1) return n1*(t-=1.5/d1)*t+.75;
+  if (t < 2.5/d1) return n1*(t-=2.25/d1)*t+.9375;
+  return n1*(t-=2.625/d1)*t+.984375;
+};
+
+// Phase timings (ms)
+const T = {
+  walk:   [0,    1400],  // walk toward glass
+  impact: [1400, 1700],  // hit
+  stun:   [1700, 2200],  // stunned, compress
+  fall:   [2200, 3200],  // fall backwards
+  ground: [3200, 3800],  // hit ground, bounce
+  rest:   [3800, 5000],  // lie on ground, stars
+};
+
+function lerp(a, b, t) { return a + (b-a)*t; }
+function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+
+function setChar({ left, bottom, rotateZ=0, squishY=1, squishX=1 }) {
+  char.style.left = left + 'px';
+  char.style.bottom = bottom + '%';
+  char.style.transform = `rotateZ(${rotateZ}deg) scaleY(${squishY}) scaleX(${squishX})`;
+
+  // shadow
+  shadow.style.left = (left + 5) + 'px';
+  shadow.style.transform = `scaleX(${squishX * (1 + Math.abs(rotateZ)/90 * 0.5)}) scaleY(${Math.max(0.3, 1 - Math.abs(rotateZ)/90 * 0.7)})`;
+}
+
+function setWalk(t) {
+  // Walk cycle — leg and arm swing
+  const cycle = Math.sin(t * Math.PI * 6) * 18;
+  legL.style.transform  = `rotateZ(${cycle}deg)`;
+  legR.style.transform  = `rotateZ(${-cycle}deg)`;
+  armL.style.transform  = `rotateZ(${-cycle * 0.6}deg)`;
+  armR.style.transform  = `rotateZ(${cycle * 0.6}deg)`;
+  head.style.transform  = '';
+}
+
+function setImpact(t) {
+  // Arms flung forward, head snaps
+  const f = easeOut(t);
+  armL.style.transform = `rotateZ(${lerp(0, -70, f)}deg)`;
+  armR.style.transform = `rotateZ(${lerp(0, -70, f)}deg)`;
+  head.style.transform = `rotateZ(${lerp(0, 15, f)}deg)`;
+  legL.style.transform = '';
+  legR.style.transform = '';
+}
+
+function setStun(t) {
+  const f = easeOut(t);
+  // arms bounce back slightly, body wobbles
+  armL.style.transform = `rotateZ(${lerp(-70, -20, f)}deg)`;
+  armR.style.transform = `rotateZ(${lerp(-70, -20, f)}deg)`;
+  head.style.transform = `rotateZ(${lerp(15, -10, f)}deg)`;
+  legL.style.transform = '';
+  legR.style.transform = '';
+}
+
+function setFall(t) {
+  const f = easeIn(t);
+  // Arms flail during fall
+  armL.style.transform = `rotateZ(${lerp(-20, 70, f)}deg)`;
+  armR.style.transform = `rotateZ(${lerp(-20, -80, f)}deg)`;
+  head.style.transform = `rotateZ(${lerp(-10, 20, f)}deg)`;
+  legL.style.transform = `rotateZ(${lerp(0, 20, f)}deg)`;
+  legR.style.transform = `rotateZ(${lerp(0, -10, f)}deg)`;
+}
+
+function setGround(t) {
+  const f = bounce(t);
+  // limbs splayed on ground
+  armL.style.transform = `rotateZ(${lerp(70, 90, f)}deg)`;
+  armR.style.transform = `rotateZ(${lerp(-80, -110, f)}deg)`;
+  head.style.transform = `rotateZ(${lerp(20, 10, f)}deg)`;
+  legL.style.transform = `rotateZ(${lerp(20, 30, f)}deg)`;
+  legR.style.transform = `rotateZ(${lerp(-10, -20, f)}deg)`;
+}
+
+function tick(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = ts - startTime;
+
+  const [wS, wE]  = T.walk;
+  const [iS, iE]  = T.impact;
+  const [sS, sE]  = T.stun;
+  const [fS, fE]  = T.fall;
+  const [gS, gE]  = T.ground;
+  const [rS, rE]  = T.rest;
+
+  const sw = stageW();
+  const startX = sw * 0.08; // starting left px
+  const glassEdge = sw * 0.82 - 60; // stop just before glass (char width ~60px)
+
+  if (elapsed < wE) {
+    // --- WALK PHASE ---
+    const t = clamp01((elapsed - wS) / (wE - wS));
+    const x = lerp(startX, glassEdge, easeOut(t));
+    setChar({ left: x, bottom: 35, rotateZ: 0, squishY: 1 - Math.abs(Math.sin(t * Math.PI * 6)) * 0.04 });
+    setWalk(t);
+
+  } else if (elapsed < iE) {
+    // --- IMPACT ---
+    const t = clamp01((elapsed - iS) / (iE - iS));
+    // slight forward lurch then stop
+    const x = lerp(glassEdge, glassEdge + 4, Math.sin(t * Math.PI));
+    setChar({ left: x, bottom: 35, rotateZ: 0, squishY: lerp(1, 0.88, Math.sin(t * Math.PI)), squishX: lerp(1, 1.08, Math.sin(t * Math.PI)) });
+    setImpact(t);
+
+    // Crack appears
+    if (t > 0.3) {
+      crack.style.opacity = Math.min(1, (t - 0.3) / 0.5);
+    }
+    // Ripple
+    if (t > 0.1 && t < 0.9) {
+      const rt = (t - 0.1) / 0.8;
+      const rs = lerp(0, 120, rt);
+      ripple.style.width  = rs + 'px';
+      ripple.style.height = rs + 'px';
+      ripple.style.opacity = 1 - rt;
+    }
+
+  } else if (elapsed < sE) {
+    // --- STUN ---
+    const t = clamp01((elapsed - sS) / (sE - sS));
+    const x = lerp(glassEdge + 4, glassEdge, easeOut(t));
+    // wobble
+    const wobble = Math.sin(t * Math.PI * 4) * 4 * (1 - t);
+    setChar({ left: x, bottom: 35, rotateZ: wobble, squishY: lerp(0.88, 1, easeOut(t)) });
+    setStun(t);
+
+  } else if (elapsed < fE) {
+    // --- FALL BACKWARDS ---
+    const t = clamp01((elapsed - fS) / (fE - fS));
+    const x = lerp(glassEdge, glassEdge - 55, easeIn(t));
+    const rot = lerp(0, -92, easeIn(t));
+    const bot = lerp(35, 35 + t * 5, t); // slight rise as they tip
+    setChar({ left: x, bottom: bot, rotateZ: rot, squishY: 1, squishX: 1 });
+    setFall(t);
+
+  } else if (elapsed < gE) {
+    // --- HIT GROUND ---
+    const t = clamp01((elapsed - gS) / (gE - gS));
+    const x = lerp(glassEdge - 55, glassEdge - 80, easeOut(t));
+    // impact squish
+    const squishY = t < 0.3 ? lerp(1, 0.7, t/0.3) : lerp(0.7, 1, (t-0.3)/0.7);
+    setChar({ left: x, bottom: lerp(40, 15, easeOut(t)), rotateZ: -92, squishY, squishX: lerp(1, 1.2, Math.sin(t * Math.PI * 0.7)) });
+    setGround(t);
+
+    // stars appear on hit
+    if (t > 0.15) {
+      stars.style.opacity = Math.min(1, (t - 0.15) / 0.3);
+    }
+
+  } else if (elapsed < rE) {
+    // --- REST ---
+    const t = clamp01((elapsed - rS) / (rE - rS));
+    const x = glassEdge - 80;
+    // slight breathing squish
+    const breathe = 1 + Math.sin(t * Math.PI * 3) * 0.015;
+    setChar({ left: x, bottom: 15, rotateZ: -92, squishY: breathe });
+    setGround(1);
+
+    // Stars float up and fade
+    const sf = Math.sin(t * Math.PI);
+    stars.style.opacity = sf;
+    stars.style.transform = `translateY(${-20 * t}px)`;
+
+  } else {
+    // Done
+    running = false;
+    playBtn.disabled = false;
+    resetBtn.disabled = false;
+    return;
+  }
+
+  if (running) animId = requestAnimationFrame(tick);
+}
+
+function startAnimation() {
+  if (running) return;
+  running = true;
+  startTime = null;
+  playBtn.disabled = true;
+  resetBtn.disabled = true;
+  animId = requestAnimationFrame(tick);
+}
+
+function resetAnimation() {
+  running = false;
+  if (animId) cancelAnimationFrame(animId);
+  startTime = null;
+
+  const sw = stageW();
+  const startX = sw * 0.08;
+  setChar({ left: startX, bottom: 35, rotateZ: 0, squishY: 1, squishX: 1 });
+
+  // Reset limbs
+  [armL, armR, legL, legR, head].forEach(el => el.style.transform = '');
+
+  // Reset fx
+  crack.style.opacity = '0';
+  ripple.style.width = '0';
+  ripple.style.height = '0';
+  ripple.style.opacity = '0';
+  stars.style.opacity = '0';
+  stars.style.transform = '';
+  shadow.style.left = (startX + 5) + 'px';
+
+  playBtn.disabled = false;
+  resetBtn.disabled = true;
+}
+
+// Init position
+window.addEventListener('DOMContentLoaded', () => resetAnimation());
+window.addEventListener('resize', () => { if (!running) resetAnimation(); });
+resetAnimation();
+</script>
+
+</body></html>
